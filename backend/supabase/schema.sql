@@ -52,7 +52,8 @@ BEGIN
         ),
         requested_role,
         NULLIF(BTRIM(NEW.raw_user_meta_data ->> 'avatar_url'), '')
-    );
+    )
+    ON CONFLICT (id) DO NOTHING;
 
     RETURN NEW;
 END;

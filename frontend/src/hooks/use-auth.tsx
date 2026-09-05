@@ -76,7 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: { data: { name, role } },
     });
-    if (error) throw error;
+    if (error) {
+      throw new Error(`Account registration failed: ${error.message}`);
+    }
 
     if (!data.user) {
       throw new Error('Registration succeeded, but the user profile could not be created. Please try again.');
