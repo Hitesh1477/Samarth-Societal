@@ -1,0 +1,11 @@
+# Exclude frontend (has its own git repo)
+frontend/
+
+# Common ignores
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.local
+*.log
+.DS_Store
