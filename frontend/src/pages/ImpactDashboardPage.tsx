@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { api } from '@/services/api';
+import { api, isMockApi } from '@/services/api';
 import type { ImpactSummary } from '@/types';
 
 export function ImpactDashboardPage() {
@@ -33,11 +33,27 @@ export function ImpactDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getImpact(projectId ?? 'proj-001').then((i) => {
+    const selectedProjectId = projectId ?? (isMockApi ? 'proj-001' : undefined);
+    if (!selectedProjectId) {
+      setLoading(false);
+      return;
+    }
+
+    api.getImpact(selectedProjectId).then((i) => {
       setImpact(i);
       setLoading(false);
     });
   }, [projectId]);
+
+  if (!loading && !impact) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="py-16 text-center text-sm text-muted-foreground">
+          Select a project to view its impact dashboard
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (loading || !impact) {
     return (

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { api } from '@/services/api';
+import { api, isMockApi } from '@/services/api';
 import type { Project, Solution } from '@/types';
 import { formatDate } from '@/lib/helpers';
 import { toast } from 'sonner';
@@ -35,14 +35,18 @@ export function ProjectDetailPage() {
   const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      api.getProject(id ?? 'proj-001'),
-      api.getSolution('ch-001'),
-    ]).then(([p, s]) => {
+    const selectedProjectId = id ?? (isMockApi ? 'proj-001' : undefined);
+    if (!selectedProjectId) {
+      setLoading(false);
+      return;
+    }
+
+    api.getProject(selectedProjectId).then(async (p) => {
+      const s = await api.getSolution(p.challengeId);
       setProject(p);
       setSolution(s);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [id]);
 
   if (loading || !project) {

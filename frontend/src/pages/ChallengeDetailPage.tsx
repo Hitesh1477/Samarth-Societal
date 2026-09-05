@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge, PriorityBadge } from '@/components/shared/Badges';
-import { api } from '@/services/api';
+import { api, isMockApi } from '@/services/api';
 import type { ChallengeDetail } from '@/types';
 import { urgencyColor, formatDate } from '@/lib/helpers';
 
@@ -32,7 +32,13 @@ export function ChallengeDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getChallenge(id ?? 'ch-001').then((c) => {
+    const selectedChallengeId = id ?? (isMockApi ? 'ch-001' : undefined);
+    if (!selectedChallengeId) {
+      setLoading(false);
+      return;
+    }
+
+    api.getChallenge(selectedChallengeId).then((c) => {
       setChallenge(c);
       setLoading(false);
     });
@@ -485,12 +491,14 @@ export function ChallengeDetailPage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{challenge.impact.summary}</p>
-                <Button asChild variant="outline" className="gap-2">
-                  <Link to={`/impact/proj-001`}>
-                    <TrendingUp className="h-4 w-4" />
-                    View Full Impact Dashboard
-                  </Link>
-                </Button>
+                {challenge.impact.projectId && (
+                  <Button asChild variant="outline" className="gap-2">
+                    <Link to={`/impact/${challenge.impact.projectId}`}>
+                      <TrendingUp className="h-4 w-4" />
+                      View Full Impact Dashboard
+                    </Link>
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (

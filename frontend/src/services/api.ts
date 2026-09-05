@@ -30,7 +30,19 @@ import {
 } from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK_API as string) === 'true';
+const USE_MOCK = !API_BASE_URL && (import.meta.env.VITE_USE_MOCK_API as string) !== 'false';
+export const isMockApi = USE_MOCK;
+
+function withFilters(path: string, filters?: ProblemFilters): string {
+  if (!filters) return path;
+
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value && value !== 'all') params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
 
 async function mockDelay(ms = 800): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -85,7 +97,7 @@ export const api = {
       reports = reports.filter((r) =>
         r.title.toLowerCase().includes(filters.search!.toLowerCase())
       );
-    return apiCall('/api/problems', { mockResponse: reports });
+    return apiCall(withFilters('/api/problems', filters), { mockResponse: reports });
   },
 
   async analyzeProblem(id: string): Promise<AIAnalysis> {
@@ -118,7 +130,7 @@ export const api = {
       challenges = challenges.filter((c) =>
         c.title.toLowerCase().includes(filters.search!.toLowerCase())
       );
-    return apiCall('/api/challenges', { mockResponse: challenges });
+    return apiCall(withFilters('/api/challenges', filters), { mockResponse: challenges });
   },
 
   async getChallenge(id: string): Promise<ChallengeDetail> {
@@ -171,10 +183,11 @@ export const api = {
     });
   },
 
-  async getSolution(challengeId: string): Promise<Solution> {
-    return apiCall(`/api/challenges/${challengeId}/solution`, {
-      mockResponse: mockChallengeDetail.solution!,
+  async getSolution(challengeId: string): Promise<Solution | null> {
+    const detail = await apiCall<ChallengeDetail>(`/api/challenges/${challengeId}`, {
+      mockResponse: mockChallengeDetail,
     });
+    return detail.solution ?? null;
   },
 
   // Milestones
@@ -211,7 +224,7 @@ export const api = {
 
   // Dashboard
   async getDashboardStats(): Promise<DashboardData> {
-    return apiCall('/api/dashboard/stats', {
+    return apiCall('/api/dashboard', {
       mockResponse: mockDashboardData,
     });
   },

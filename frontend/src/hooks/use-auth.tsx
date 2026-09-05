@@ -71,13 +71,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (name: string, email: string, password: string, role: UserRole) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name, role } },
     });
     if (error) throw error;
-    const newUser: AuthUser = { id: 'demo', name, email, role };
+
+    if (!data.user) {
+      throw new Error('Registration succeeded, but the user profile could not be created. Please try again.');
+    }
+
+    const newUser: AuthUser = { id: data.user.id, name, email, role };
     setUser(newUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
   };

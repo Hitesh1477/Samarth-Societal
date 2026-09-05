@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { api } from '@/services/api';
+import { api, isMockApi } from '@/services/api';
 import type { AIAnalysis, DuplicateCluster } from '@/types';
 import { urgencyColor } from '@/lib/helpers';
 
@@ -48,10 +48,15 @@ export function AIAnalysisPage() {
         await new Promise((r) => setTimeout(r, 1000));
       }
       if (cancelled) return;
+      const selectedProblemId = id ?? (isMockApi ? 'rpt-001' : undefined);
+      if (!selectedProblemId) {
+        setLoading(false);
+        return;
+      }
       try {
         const [a, d] = await Promise.all([
-          api.analyzeProblem(id ?? 'rpt-001'),
-          api.getRelatedProblems(id ?? 'rpt-001'),
+          api.analyzeProblem(selectedProblemId),
+          api.getRelatedProblems(selectedProblemId),
         ]);
         if (cancelled) return;
         setAnalysis(a);
@@ -121,6 +126,8 @@ export function AIAnalysisPage() {
       </div>
     );
   }
+
+  const unifiedChallengeId = duplicates?.unifiedChallengeId ?? (isMockApi ? 'ch-001' : undefined);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
@@ -313,12 +320,18 @@ export function AIAnalysisPage() {
         <Button variant="outline" onClick={() => navigate('/problems')}>
           View All Problems
         </Button>
-        <Button asChild className="gap-2">
-          <Link to={`/challenges/${duplicates?.unifiedChallengeId ?? 'ch-001'}`}>
-            View Unified Challenge
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
+        {unifiedChallengeId ? (
+          <Button asChild className="gap-2">
+            <Link to={`/challenges/${unifiedChallengeId}`}>
+              View Unified Challenge
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button className="gap-2" disabled>
+            Unified Challenge Unavailable
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { api } from '@/services/api';
+import { api, isMockApi } from '@/services/api';
 import type { SolverMatch } from '@/types';
 import { toast } from 'sonner';
 
@@ -26,7 +26,13 @@ export function SolverMatchingPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getSolverMatches(challengeId ?? 'ch-001').then((s) => {
+    const selectedChallengeId = challengeId ?? (isMockApi ? 'ch-001' : undefined);
+    if (!selectedChallengeId) {
+      setLoading(false);
+      return;
+    }
+
+    api.getSolverMatches(selectedChallengeId).then((s) => {
       setSolvers(s);
       setLoading(false);
     });

@@ -48,13 +48,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 # FastAPI backend (leave empty to use mock mode)
 VITE_API_BASE_URL=http://localhost:8000
 
-# Set to "true" to use mock data instead of the real backend
-VITE_USE_MOCK_API=true
+# Set to "true" only when VITE_API_BASE_URL is empty
+VITE_USE_MOCK_API=false
 ```
 
 ## Mock Mode
 
-The frontend works **even when the FastAPI backend is not running**. When `VITE_USE_MOCK_API=true` (or when `VITE_API_BASE_URL` is empty), all API calls return realistic mock data with simulated delays. This allows full frontend development before backend integration.
+The frontend works **even when the FastAPI backend is not running**. When `VITE_API_BASE_URL` is empty, API calls return realistic mock data with simulated delays. This allows full frontend development before backend integration. A configured API base URL always selects the real backend, even if a stale mock flag is present.
 
 The UI uses the exact same response structures for mock and real API — switching between them requires no code changes.
 
@@ -85,7 +85,7 @@ The UI uses the exact same response structures for mock and real API — switchi
 | PUT | `/api/milestones/{id}` | Update a milestone |
 | POST | `/api/projects/{id}/impact` | Add impact metric |
 | GET | `/api/projects/{id}/impact` | Get impact summary |
-| GET | `/api/dashboard/stats` | Get dashboard statistics |
+| GET | `/api/dashboard` | Get dashboard analytics and statistics |
 | GET | `/api/map/challenges` | Get map challenge data |
 
 ## Supabase Setup
