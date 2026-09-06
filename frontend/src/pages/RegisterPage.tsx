@@ -16,7 +16,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types';
 
-const roles: UserRole[] = ['CITIZEN', 'GOVERNMENT', 'UNIVERSITY', 'FACULTY', 'STUDENT', 'INDUSTRY', 'ADMIN'];
+const roles: UserRole[] = ['CITIZEN', 'GOVERNMENT', 'UNIVERSITY', 'FACULTY', 'STUDENT', 'INDUSTRY'];
 
 export function RegisterPage() {
   const { signUp } = useAuth();

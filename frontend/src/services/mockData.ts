@@ -808,5 +808,6 @@ export function createMockReport(data: SubmitProblemData): ProblemReport {
     status: 'SUBMITTED',
     createdAt: new Date().toISOString(),
     reporterName: data.reporterName,
+    reporterId: data.reporterId,
   };
 }

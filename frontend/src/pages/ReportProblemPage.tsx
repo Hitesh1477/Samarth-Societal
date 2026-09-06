@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
 import type { Evidence, ProblemCategory, SubmitProblemData, UrgencyLevel } from '@/types';
+import { useAuth } from '@/hooks/use-auth';
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -71,6 +72,7 @@ function LocationPicker({
 
 export function ReportProblemPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -141,7 +143,8 @@ export function ReportProblemPage() {
         affectedPopulation: parseInt(affectedPopulation) || 100,
         location,
         evidence,
-        reporterName: 'Demo User',
+        reporterName: user?.name ?? 'Demo User',
+        reporterId: user?.id,
       };
       const report = await api.submitProblem(data);
       toast.success('Problem submitted for AI analysis');

@@ -63,6 +63,7 @@ class ProblemReportSchema(CamelModel):
     distance: Optional[str] = None
     created_at: str                             # → createdAt  (ISO-8601 string)
     reporter_name: str                          # → reporterName
+    reporter_id: Optional[str] = None          # → reporterId
 
 
 # ── SubmitProblemData (Request Body) ─────────────────────────────────────────
@@ -83,6 +84,7 @@ class SubmitProblemRequest(CamelModel):
     location: LocationSchema
     evidence: list[EvidenceSchema] = []
     reporter_name: str = Field(default="Anonymous", max_length=200)  # → reporterName
+    reporter_id: Optional[str] = Field(default=None, max_length=200)  # → reporterId
 
     @field_validator("location")
     @classmethod
@@ -101,3 +103,4 @@ class ProblemFilters(CamelModel):
     category: Optional[str] = None
     district: Optional[str] = None
     search: Optional[str] = None
+    reporter_id: Optional[str] = None   # → reporterId (Citizen "My Reports" filter)

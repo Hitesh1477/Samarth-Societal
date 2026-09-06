@@ -59,6 +59,7 @@ def _row_to_problem_report(row: dict, evidence: list[dict]) -> ProblemReportSche
         distance=row.get("distance"),
         created_at=row["created_at"],
         reporter_name=row.get("reporter_name", ""),
+        reporter_id=row.get("reporter_id"),
     )
 
 
@@ -97,6 +98,7 @@ async def create_problem(data: SubmitProblemRequest) -> ProblemReportSchema:
         "location_name": data.location.name,
         "location_district": data.location.district,
         "reporter_name": data.reporter_name,
+        "reporter_id": data.reporter_id,
         "status": ProblemStatus.SUBMITTED,
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -143,6 +145,7 @@ async def list_problems(
     category: Optional[str] = None,
     district: Optional[str] = None,
     search: Optional[str] = None,
+    reporter_id: Optional[str] = None,
 ) -> list[ProblemReportSchema]:
     """
     Fetch all problems with optional server-side filtering.
@@ -168,6 +171,9 @@ async def list_problems(
             # Supabase ilike filter on title (fast); description search via ilike OR
             search_term = f"%{search.strip()}%"
             query = query.or_(f"title.ilike.{search_term},description.ilike.{search_term}")
+
+        if reporter_id and reporter_id.strip():
+            query = query.eq("reporter_id", reporter_id.strip())
 
         res = query.execute()
     except Exception as exc:
@@ -261,12 +267,23 @@ async def analyze_problem(
     client = get_supabase_admin_client()
     now_iso = datetime.now(timezone.utc).isoformat()
     try:
-        client.table("problems").update({
-            "status": ProblemStatus.ANALYZED,
-            "updated_at": now_iso,
-        }).eq("id", problem_id).execute()
+        update_res = (
+            client.table("problems")
+            .update({
+                "status": ProblemStatus.ANALYZED.value,
+                "updated_at": now_iso,
+            })
+            .eq("id", problem_id)
+            .execute()
+        )
     except Exception as exc:
-        print(f"[WARN] Failed to update status for problem {problem_id} to ANALYZED: {exc}")
+        raise _db_error(exc, f"update problem {problem_id} status")
+
+    if update_res.data is not None and not update_res.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Problem analysis completed, but status could not be persisted.",
+        )
 
     return analysis
 

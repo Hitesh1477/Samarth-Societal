@@ -3,7 +3,7 @@ Stage 5A test suite — run from backend/ directory:
     python -u test_stage5a.py
 
 Covers:
-  1. Route registration (POST /api/projects/{id}/milestones, PUT /api/milestones/{id})
+    1. Route registration (GET/POST /api/projects/{id}/milestones, PUT /api/milestones/{id})
   2. Nonexistent project reference -> 404
   3. Milestone creation linked to a project -> 201
   4. Nonexistent milestone update -> 404
@@ -71,6 +71,11 @@ paths = body.get("paths", {}) if isinstance(body, dict) else {}
 
 check("OpenAPI reachable", code == 200, str(code))
 check(
+    "GET /api/projects/{project_id}/milestones registered",
+    "/api/projects/{project_id}/milestones" in paths
+    and "get" in paths.get("/api/projects/{project_id}/milestones", {}),
+)
+check(
     "POST /api/projects/{project_id}/milestones registered",
     "/api/projects/{project_id}/milestones" in paths
     and "post" in paths.get("/api/projects/{project_id}/milestones", {}),
@@ -132,6 +137,11 @@ try:
     # ── 3. Valid Milestone Creation ─────────────────────────────────────────────
 
     if test_project_id:
+        print(f"\n[3.5] GET /api/projects/{test_project_id}/milestones")
+        code, res = request("GET", f"/api/projects/{test_project_id}/milestones")
+        check("HTTP 200 OK for project milestones", code == 200, str(code))
+        check("Milestone list response is a list", isinstance(res, list), type(res).__name__)
+
         print(f"\n[3] POST /api/projects/{test_project_id}/milestones (create milestone 1)")
         m1_req = {
             "title": "Milestone 1: Sensor Procurement & Calibration",

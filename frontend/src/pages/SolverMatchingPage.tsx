@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -24,19 +24,40 @@ export function SolverMatchingPage() {
   const { challengeId } = useParams<{ challengeId: string }>();
   const [solvers, setSolvers] = useState<SolverMatch[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestedChallengeId = useRef<string | null>(null);
 
   useEffect(() => {
     const selectedChallengeId = challengeId ?? (isMockApi ? 'ch-001' : undefined);
     if (!selectedChallengeId) {
+      setError('A challenge ID is required to find solver matches.');
       setLoading(false);
       return;
     }
+    if (requestedChallengeId.current === selectedChallengeId) return;
+    requestedChallengeId.current = selectedChallengeId;
 
-    api.getSolverMatches(selectedChallengeId).then((s) => {
-      setSolvers(s);
-      setLoading(false);
-    });
+    api.getSolverMatches(selectedChallengeId)
+      .then((s) => {
+        setSolvers(s);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        requestedChallengeId.current = null;
+        setError(err instanceof Error ? err.message : 'Unable to load solver matches.');
+        setLoading(false);
+      });
   }, [challengeId]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Users className="h-8 w-8 text-destructive" />
+        <h2 className="mt-4 font-heading text-xl font-semibold">Solver matches unavailable</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+      </div>
+    );
+  }
 
   if (loading || !solvers) {
     return (
@@ -49,6 +70,19 @@ export function SolverMatchingPage() {
 
   const universities = solvers.filter((s) => s.type === 'university');
   const industries = solvers.filter((s) => s.type === 'industry');
+  const bestMatch = solvers[0];
+
+  if (solvers.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Users className="h-8 w-8 text-muted-foreground" />
+        <h2 className="mt-4 font-heading text-xl font-semibold">No solver matches found</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          No eligible solver profiles are available for this challenge yet.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -189,10 +223,7 @@ export function SolverMatchingPage() {
             <div>
               <p className="text-sm font-semibold text-primary">AI Matching Explanation</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Recommended because this team has experience in drainage modelling, GIS mapping
-                and urban infrastructure projects. Match scores are calculated using expertise
-                alignment, past project similarity, team availability, and geographic proximity
-                to the challenge location.
+                {bestMatch.description} {bestMatch.reasons.join('. ')}.
               </p>
             </div>
           </div>

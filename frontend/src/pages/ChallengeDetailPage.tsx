@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   MapPin,
@@ -25,11 +25,15 @@ import { StatusBadge, PriorityBadge } from '@/components/shared/Badges';
 import { api, isMockApi } from '@/services/api';
 import type { ChallengeDetail } from '@/types';
 import { urgencyColor, formatDate } from '@/lib/helpers';
+import { toast } from 'sonner';
 
 export function ChallengeDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
 
   useEffect(() => {
     const selectedChallengeId = id ?? (isMockApi ? 'ch-001' : undefined);
@@ -62,6 +66,37 @@ export function ChallengeDetailPage() {
     { label: 'Evidence', ...breakdown.evidence },
     { label: 'Location Risk', ...breakdown.locationRisk },
   ];
+
+  const handleCreateProject = async () => {
+    if (creatingProject) return;
+
+    setCreatingProject(true);
+    setProjectError(null);
+    const selectedSolver = challenge.matchedSolvers[0];
+    try {
+      const project = await api.createProject({
+        challengeId: challenge.id,
+        title: `${challenge.title} Solution Project`,
+        team: selectedSolver
+          ? [{
+              id: selectedSolver.id,
+              name: selectedSolver.name,
+              role: selectedSolver.type === 'university' ? 'University Solver' : 'Industry Partner',
+            }]
+          : [],
+        facultyMentor: selectedSolver?.type === 'university' ? selectedSolver.name : '',
+        industryPartner: selectedSolver?.type === 'industry' ? selectedSolver.name : '',
+      });
+      toast.success('Solution project created');
+      navigate(`/projects/${project.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to create solution project.';
+      setProjectError(message);
+      toast.error(message);
+    } finally {
+      setCreatingProject(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -424,8 +459,12 @@ export function ChallengeDetailPage() {
             </>
           ) : (
             <Card className="border-dashed">
-              <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                No solution proposed yet
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <p className="text-sm text-muted-foreground">No solution proposed yet</p>
+                <Button className="mt-4" onClick={handleCreateProject} disabled={creatingProject}>
+                  {creatingProject ? 'Creating Project...' : 'Start Solution Project'}
+                </Button>
+                {projectError && <p className="mt-3 text-sm text-destructive">{projectError}</p>}
               </CardContent>
             </Card>
           )}

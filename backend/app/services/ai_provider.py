@@ -1,19 +1,15 @@
-"""
-AI Provider abstraction for SAMARTH problem analysis.
+"""AI provider for structured SAMARTH problem analysis."""
 
-Provides integration with OpenAI when OPENAI_API_KEY is configured,
-with seamless deterministic fallback when unconfigured or offline.
-"""
-
+import asyncio
 import json
 import re
-import httpx
-from typing import Optional
+
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 from app.schemas.ai import AIAnalysisSchema
 from app.schemas.problems import ProblemReportSchema
-from app.schemas.enums import ProblemCategory, UrgencyLevel
 
 
 def extract_fallback_keywords(title: str, description: str) -> list[str]:
@@ -27,30 +23,27 @@ def extract_fallback_keywords(title: str, description: str) -> list[str]:
     clean_words: list[str] = []
     seen: set[str] = set()
 
-    for w in words:
-        w_lower = w.lower()
-        if len(w_lower) >= 4 and w_lower not in stopwords and w_lower not in seen:
-            seen.add(w_lower)
-            clean_words.append(w.capitalize())
+    for word in words:
+        word_lower = word.lower()
+        if len(word_lower) >= 4 and word_lower not in stopwords and word_lower not in seen:
+            seen.add(word_lower)
+            clean_words.append(word.capitalize())
             if len(clean_words) >= 5:
                 break
 
-    if not clean_words:
-        clean_words = ["Report", "Issue", "Community"]
-
-    return clean_words
+    return clean_words or ["Report", "Issue", "Community"]
 
 
 def generate_fallback_analysis(problem: ProblemReportSchema) -> AIAnalysisSchema:
     """Generate deterministic fallback analysis for local testing/offline use."""
-    subcat = problem.subcategory if problem.subcategory else "General"
+    subcategory = problem.subcategory if problem.subcategory else "General"
     statement = f"Structured Analysis: {problem.title} — {problem.description}"
 
     return AIAnalysisSchema(
         problem_id=problem.id,
         structured_statement=statement,
         category=problem.category,
-        subcategory=subcat,
+        subcategory=subcategory,
         keywords=extract_fallback_keywords(problem.title, problem.description),
         urgency=problem.urgency,
         confidence=0.85,
@@ -59,85 +52,69 @@ def generate_fallback_analysis(problem: ProblemReportSchema) -> AIAnalysisSchema
     )
 
 
-async def analyze_problem_with_openai(problem: ProblemReportSchema) -> AIAnalysisSchema:
-    """Analyze problem report using OpenAI Chat Completions API."""
-    api_key = settings.OPENAI_API_KEY.strip()
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+def _gemini_prompt(problem: ProblemReportSchema) -> str:
+    return f"""Analyze this citizen problem for the SAMARTH civic platform.
 
-    prompt = (
-        f"Analyze the following citizen problem report:\n"
-        f"Title: {problem.title}\n"
-        f"Description: {problem.description}\n"
-        f"Category: {problem.category}\n"
-        f"Subcategory: {problem.subcategory}\n"
-        f"Urgency: {problem.urgency}\n"
-        f"Affected Population: {problem.affected_population}\n"
-        f"District: {problem.location.district}\n"
-        f"Evidence Count: {len(problem.evidence)}\n\n"
-        f"Return ONLY a JSON object with fields:\n"
-        f"- structuredStatement: concise formal problem statement framing core issue and impact\n"
-        f"- category: valid ProblemCategory string\n"
-        f"- subcategory: refined subcategory string\n"
-        f"- keywords: array of 3 to 6 key terms\n"
-        f"- urgency: one of 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'\n"
-        f"- confidence: float score between 0.0 and 1.0\n"
-        f"- affectedPopulation: integer\n"
+Title: {problem.title}
+Description: {problem.description}
+Category: {problem.category}
+Subcategory: {problem.subcategory}
+Urgency reported by citizen: {problem.urgency}
+Affected population: {problem.affected_population}
+Location: {problem.location.name}, {problem.location.district} ({problem.location.lat}, {problem.location.lng})
+Evidence count: {len(problem.evidence)}
+
+Return only a JSON object with these fields:
+structuredStatement (concise formal problem statement),
+category (one of Infrastructure, Water & Sanitation, Healthcare, Education, Agriculture, Environment, Public Safety, Transport, Waste Management, Other),
+subcategory (refined short label),
+keywords (array of 3 to 6 strings),
+urgency (one of LOW, MEDIUM, HIGH, CRITICAL),
+confidence (number from 0.0 to 1.0),
+affectedPopulation (non-negative integer).
+Do not invent a problemId or evidenceCount; the application supplies those values."""
+
+
+def _parse_gemini_analysis(problem: ProblemReportSchema, response_text: str) -> AIAnalysisSchema:
+    parsed = json.loads(response_text)
+    parsed["problemId"] = problem.id
+    parsed["evidenceCount"] = len(problem.evidence)
+    return AIAnalysisSchema.model_validate(parsed)
+
+
+def _generate_with_gemini(problem: ProblemReportSchema) -> AIAnalysisSchema:
+    client = genai.Client(api_key=settings.GEMINI_API_KEY.strip())
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=_gemini_prompt(problem),
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
+    response_text = getattr(response, "text", None)
+    if not response_text:
+        raise ValueError("Gemini returned an empty response")
+    return _parse_gemini_analysis(problem, response_text)
 
-    payload = {
-        "model": "gpt-4o-mini",
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are an expert civic issue analyst for SAMARTH platform. Produce valid JSON analysis matching requested schema."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0.2,
-    }
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-
-    return AIAnalysisSchema(
-        problem_id=problem.id,
-        structured_statement=parsed.get("structuredStatement") or f"Analysis for: {problem.title}",
-        category=parsed.get("category") or problem.category,
-        subcategory=parsed.get("subcategory") or problem.subcategory or "General",
-        keywords=parsed.get("keywords") or extract_fallback_keywords(problem.title, problem.description),
-        urgency=parsed.get("urgency") or problem.urgency,
-        confidence=float(parsed.get("confidence", 0.9)),
-        affected_population=int(parsed.get("affectedPopulation", problem.affected_population)),
-        evidence_count=len(problem.evidence),
-    )
+async def analyze_problem_with_gemini(problem: ProblemReportSchema) -> AIAnalysisSchema:
+    """Analyze a problem with Gemini without blocking FastAPI's event loop."""
+    return await asyncio.to_thread(_generate_with_gemini, problem)
 
 
 async def analyze_problem_with_ai(
     problem: ProblemReportSchema,
     force_fallback: bool = False,
 ) -> AIAnalysisSchema:
-    """
-    Main entry point for AI problem analysis.
-    Uses OpenAI if OPENAI_API_KEY is configured, otherwise uses fallback.
-    """
-    api_key = settings.OPENAI_API_KEY.strip() if settings.OPENAI_API_KEY else ""
+    """Use Gemini when configured, otherwise use deterministic fallback."""
+    api_key = settings.GEMINI_API_KEY.strip() if settings.GEMINI_API_KEY else ""
 
     if force_fallback or not api_key:
         return generate_fallback_analysis(problem)
 
     try:
-        return await analyze_problem_with_openai(problem)
+        return await analyze_problem_with_gemini(problem)
     except Exception as exc:
-        print(f"[AI PROVIDER WARN] OpenAI API call failed ({exc}). Falling back to deterministic analysis.")
+        print(
+            f"[AI PROVIDER WARN] Gemini analysis failed ({type(exc).__name__}). "
+            "Falling back to deterministic analysis."
+        )
         return generate_fallback_analysis(problem)

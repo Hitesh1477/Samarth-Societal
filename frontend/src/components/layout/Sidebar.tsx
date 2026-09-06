@@ -14,6 +14,7 @@ import {
   ListChecks,
   TrendingUp,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
@@ -26,7 +27,7 @@ interface SidebarProps {
 }
 
 const adminNav = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/admin/dashboard', label: 'Admin Dashboard', icon: ShieldCheck },
   { to: '/problems', label: 'Problems', icon: FileText },
   { to: '/challenges', label: 'Challenges', icon: Target },
   { to: '/map', label: 'Map', icon: Map },
@@ -42,10 +43,36 @@ const citizenNav = [
   { to: '/impact', label: 'My Impact', icon: TrendingUp },
 ];
 
+// Shared nav for solver-type roles (GOVERNMENT, UNIVERSITY, FACULTY, STUDENT, INDUSTRY)
+const solverNav = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/challenges', label: 'Challenges', icon: Target },
+  { to: '/map', label: 'Map', icon: Map },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/impact', label: 'Impact', icon: TrendingUp },
+];
+
+function getNavItems(role: string | undefined) {
+  switch (role) {
+    case 'ADMIN':
+      return adminNav;
+    case 'CITIZEN':
+      return citizenNav;
+    case 'GOVERNMENT':
+    case 'UNIVERSITY':
+    case 'FACULTY':
+    case 'STUDENT':
+    case 'INDUSTRY':
+      return solverNav;
+    default:
+      return citizenNav;
+  }
+}
+
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const navItems = user?.role === 'CITIZEN' ? citizenNav : adminNav;
+  const navItems = getNavItems(user?.role);
 
   const handleSignOut = async () => {
     await signOut();
@@ -115,6 +142,17 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
           {/* Bottom */}
           <div className="space-y-1 p-3">
+            {/* Admin Portal shortcut — only visible to ADMIN role */}
+            {user?.role === 'ADMIN' && (
+              <NavLink
+                to="/admin/dashboard"
+                onClick={onClose}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <ShieldCheck className="h-4.5 w-4.5" style={{ width: '1.125rem', height: '1.125rem' }} />
+                Admin Portal
+              </NavLink>
+            )}
             <NavLink
               to="/profile"
               onClick={onClose}

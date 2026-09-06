@@ -117,6 +117,72 @@ CREATE INDEX IF NOT EXISTS idx_challenges_category ON challenges(category);
 CREATE INDEX IF NOT EXISTS idx_challenges_district ON challenges(district);
 
 -- =============================================================================
+-- PROJECTS
+-- A solution workspace linked to a challenge.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS projects (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    challenge_id     UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+    challenge_title  TEXT NOT NULL DEFAULT '',
+    title            TEXT NOT NULL,
+    description      TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'PROPOSAL'
+                         CHECK (status IN ('PROPOSAL','ACTIVE','PILOT','COMPLETED')),
+    progress         NUMERIC(5,2) NOT NULL DEFAULT 0
+                         CHECK (progress >= 0 AND progress <= 100),
+    team             JSONB NOT NULL DEFAULT '[]'::jsonb,
+    faculty_mentor   TEXT NOT NULL DEFAULT '',
+    industry_partner TEXT NOT NULL DEFAULT '',
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_projects_challenge_id ON projects(challenge_id);
+CREATE INDEX IF NOT EXISTS idx_projects_status       ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_created_at   ON projects(created_at DESC);
+
+-- =============================================================================
+-- MILESTONES
+-- Progress checkpoints belonging to a solution project.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS milestones (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id     UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title          TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending','in_progress','completed')),
+    progress       NUMERIC(5,2) NOT NULL DEFAULT 0
+                       CHECK (progress >= 0 AND progress <= 100),
+    due_date       TEXT NOT NULL DEFAULT '',
+    evidence_count INTEGER NOT NULL DEFAULT 0 CHECK (evidence_count >= 0),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_milestones_project_id ON milestones(project_id);
+CREATE INDEX IF NOT EXISTS idx_milestones_status     ON milestones(status);
+CREATE INDEX IF NOT EXISTS idx_milestones_created_at ON milestones(created_at DESC);
+
+-- =============================================================================
+-- IMPACT METRICS
+-- Before/after measurements belonging to a project.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS impact_metrics (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    label      TEXT NOT NULL,
+    before     DOUBLE PRECISION NOT NULL,
+    after      DOUBLE PRECISION NOT NULL,
+    unit       TEXT NOT NULL DEFAULT '',
+    improvement DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_impact_metrics_project_id ON impact_metrics(project_id);
+CREATE INDEX IF NOT EXISTS idx_impact_metrics_created_at ON impact_metrics(created_at DESC);
+
+-- =============================================================================
 -- PROBLEMS
 -- A raw citizen-submitted report.
 -- =============================================================================
@@ -147,6 +213,8 @@ CREATE TABLE IF NOT EXISTS problems (
 
     -- Reporter (anonymous for MVP — no auth required to submit)
     reporter_name       TEXT NOT NULL DEFAULT '',
+    -- Supabase Auth user ID of the submitting citizen (NULL for anonymous / legacy records)
+    reporter_id         TEXT,
 
     -- Workflow
     status              TEXT NOT NULL DEFAULT 'SUBMITTED'
@@ -169,6 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_problems_district         ON problems(location_di
 CREATE INDEX IF NOT EXISTS idx_problems_status           ON problems(status);
 CREATE INDEX IF NOT EXISTS idx_problems_created_at       ON problems(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_problems_challenge_id     ON problems(challenge_id);
+CREATE INDEX IF NOT EXISTS idx_problems_reporter_id      ON problems(reporter_id);
 
 -- Full-text search index on title + description
 CREATE INDEX IF NOT EXISTS idx_problems_fts ON problems
@@ -244,12 +313,18 @@ ALTER TABLE problem_evidence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE problem_clusters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE challenges       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE solver_profiles  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE milestones        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE impact_metrics    ENABLE ROW LEVEL SECURITY;
 
 -- Public read on problems, challenges, and solver_profiles
 CREATE POLICY "Public read problems"        ON problems        FOR SELECT USING (true);
 CREATE POLICY "Public read challenges"      ON challenges      FOR SELECT USING (true);
 CREATE POLICY "Public read evidence"        ON problem_evidence FOR SELECT USING (true);
 CREATE POLICY "Public read solver_profiles" ON solver_profiles FOR SELECT USING (true);
+CREATE POLICY "Public read projects"        ON projects       FOR SELECT USING (true);
+CREATE POLICY "Public read milestones"       ON milestones      FOR SELECT USING (true);
+CREATE POLICY "Public read impact_metrics"   ON impact_metrics  FOR SELECT USING (true);
 
 -- Anyone can submit a problem (anonymous reports allowed in MVP)
 CREATE POLICY "Public insert problems" ON problems     FOR INSERT WITH CHECK (true);

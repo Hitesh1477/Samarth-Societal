@@ -23,7 +23,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
   const navigate = useNavigate();
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-    : 'AD';
+    : 'U';
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur-md lg:px-6">
@@ -82,8 +82,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="hidden text-left sm:block">
-                <p className="text-sm font-medium leading-none">{user?.name ?? 'Admin User'}</p>
-                <p className="text-xs text-muted-foreground">{user?.role ?? 'ADMIN'}</p>
+                <p className="text-sm font-medium leading-none">{user?.name ?? 'User'}</p>
+                <p className="text-xs text-muted-foreground">{user?.role ?? 'USER'}</p>
               </div>
             </button>
           </DropdownMenuTrigger>

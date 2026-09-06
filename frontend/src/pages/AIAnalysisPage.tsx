@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { api, isMockApi } from '@/services/api';
-import type { AIAnalysis, DuplicateCluster } from '@/types';
+import type { AIAnalysis, DuplicateCluster, PriorityScore } from '@/types';
 import { urgencyColor } from '@/lib/helpers';
 
 const steps = [
@@ -37,7 +37,9 @@ export function AIAnalysisPage() {
   const [step, setStep] = useState(0);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCluster | null>(null);
+  const [priority, setPriority] = useState<PriorityScore | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,16 +56,17 @@ export function AIAnalysisPage() {
         return;
       }
       try {
-        const [a, d] = await Promise.all([
-          api.analyzeProblem(selectedProblemId),
-          api.getRelatedProblems(selectedProblemId),
-        ]);
+        const a = await api.analyzeProblem(selectedProblemId);
+        const d = await api.getRelatedProblems(selectedProblemId);
+        const p = await api.getPriority(d.unifiedChallengeId ?? selectedProblemId);
         if (cancelled) return;
         setAnalysis(a);
         setDuplicates(d);
+        setPriority(p);
         setLoading(false);
-      } catch {
+      } catch (err) {
         if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Unable to load AI analysis.');
         setLoading(false);
       }
     };
@@ -73,7 +76,17 @@ export function AIAnalysisPage() {
     };
   }, [id]);
 
-  if (loading || !analysis) {
+  if (error) {
+    return (
+      <div className="mx-auto flex max-w-2xl flex-col items-center justify-center py-20 text-center">
+        <AlertCircle className="mb-4 h-10 w-10 text-destructive" />
+        <h2 className="font-heading text-2xl font-bold">Analysis unavailable</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+      </div>
+    );
+  }
+
+  if (loading || !analysis || !priority) {
     return (
       <div className="mx-auto flex max-w-2xl flex-col items-center justify-center py-20">
         <div className="relative mb-8">
@@ -179,7 +192,7 @@ export function AIAnalysisPage() {
               </Badge>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Confidence: <span className="font-semibold text-foreground">{analysis.confidence}%</span>
+              Confidence: <span className="font-semibold text-foreground">{Math.round(analysis.confidence * 100)}%</span>
             </p>
           </CardContent>
         </Card>
@@ -215,19 +228,23 @@ export function AIAnalysisPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">Related Reports Detected</CardTitle>
+                <CardTitle className="text-base">
+                  {duplicates.reports.length > 0 ? 'Related Reports Detected' : 'No Related Reports Detected'}
+                </CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  AI found similar reports and merged them into a unified challenge
+                  {duplicates.reports.length > 0
+                    ? 'AI found similar reports and merged them into a unified challenge'
+                    : 'No similar reports were found for this problem'}
                 </p>
               </div>
-              <div className="flex items-center gap-3 text-right">
+              {duplicates.reports.length > 0 && <div className="flex items-center gap-3 text-right">
                 <div>
                   <p className="text-2xl font-bold text-primary">{duplicates.totalReports}</p>
                   <p className="text-xs text-muted-foreground">citizen reports</p>
                 </div>
                 <ArrowRight className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-2xl font-bold text-emerald-600">{duplicates.similarity}%</p>
+                  <p className="text-2xl font-bold text-emerald-600">{Math.round(duplicates.similarity * 100)}%</p>
                   <p className="text-xs text-muted-foreground">similarity</p>
                 </div>
                 <ArrowRight className="h-5 w-5 text-muted-foreground" />
@@ -235,7 +252,7 @@ export function AIAnalysisPage() {
                   <p className="text-2xl font-bold">1</p>
                   <p className="text-xs text-muted-foreground">unified challenge</p>
                 </div>
-              </div>
+              </div>}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -257,16 +274,18 @@ export function AIAnalysisPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <div className="w-16">
-                    <Progress value={r.similarity} className="h-1.5" />
+                    <Progress value={r.similarity * 100} className="h-1.5" />
                   </div>
-                  <span className="text-sm font-semibold text-primary">{r.similarity}%</span>
+                  <span className="text-sm font-semibold text-primary">{Math.round(r.similarity * 100)}%</span>
                 </div>
               </div>
             ))}
-            <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              Likely duplicate / related reports merged into unified challenge
-            </div>
+            {duplicates.reports.length > 0 && (
+              <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Likely duplicate / related reports merged into unified challenge
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -282,36 +301,51 @@ export function AIAnalysisPage() {
         <CardContent>
           <div className="flex items-center gap-6">
             <div className="text-center">
-              <p className="font-heading text-4xl font-bold text-primary">87</p>
+              <p className="font-heading text-4xl font-bold text-primary">{priority.total}</p>
               <p className="text-xs text-muted-foreground">/ 100</p>
             </div>
             <div className="flex-1 space-y-2">
               <div>
                 <div className="flex justify-between text-xs">
                   <span>Safety Risk</span>
-                  <span className="font-medium">25/30</span>
+                  <span className="font-medium">{priority.breakdown.safetyRisk.score}/{priority.breakdown.safetyRisk.max}</span>
                 </div>
-                <Progress value={83} className="h-2" />
+                <Progress value={(priority.breakdown.safetyRisk.score / priority.breakdown.safetyRisk.max) * 100} className="h-2" />
               </div>
               <div>
                 <div className="flex justify-between text-xs">
                   <span>Population Impact</span>
-                  <span className="font-medium">22/25</span>
+                  <span className="font-medium">{priority.breakdown.populationImpact.score}/{priority.breakdown.populationImpact.max}</span>
                 </div>
-                <Progress value={88} className="h-2" />
+                <Progress value={(priority.breakdown.populationImpact.score / priority.breakdown.populationImpact.max) * 100} className="h-2" />
               </div>
               <div>
                 <div className="flex justify-between text-xs">
                   <span>Recurrence</span>
-                  <span className="font-medium">18/20</span>
+                  <span className="font-medium">{priority.breakdown.recurrence.score}/{priority.breakdown.recurrence.max}</span>
                 </div>
-                <Progress value={90} className="h-2" />
+                <Progress value={(priority.breakdown.recurrence.score / priority.breakdown.recurrence.max) * 100} className="h-2" />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs">
+                  <span>Evidence</span>
+                  <span className="font-medium">{priority.breakdown.evidence.score}/{priority.breakdown.evidence.max}</span>
+                </div>
+                <Progress value={(priority.breakdown.evidence.score / priority.breakdown.evidence.max) * 100} className="h-2" />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs">
+                  <span>Location Risk</span>
+                  <span className="font-medium">{priority.breakdown.locationRisk.score}/{priority.breakdown.locationRisk.max}</span>
+                </div>
+                <Progress value={(priority.breakdown.locationRisk.score / priority.breakdown.locationRisk.max) * 100} className="h-2" />
               </div>
             </div>
             <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-              HIGH PRIORITY
+              {priority.level} PRIORITY
             </Badge>
           </div>
+          <p className="mt-4 text-sm text-muted-foreground">{priority.explanation}</p>
         </CardContent>
       </Card>
 

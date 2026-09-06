@@ -31,20 +31,6 @@ export function LoginPage() {
     }
   };
 
-  const handleDemo = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      await signIn('admin@samarth.gov.in', 'demo1234');
-      toast.success('Signed in as demo admin');
-      navigate('/dashboard');
-    } catch {
-      setError('Demo sign-in failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50/30 to-background px-4">
       <div className="w-full max-w-md">
@@ -108,15 +94,6 @@ export function LoginPage() {
               <Button type="submit" className="w-full gap-2" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign In'}
                 {!loading && <ArrowRight className="h-4 w-4" />}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleDemo}
-                disabled={loading}
-              >
-                Continue as Demo Admin
               </Button>
             </form>
             <p className="mt-6 text-center text-sm text-muted-foreground">

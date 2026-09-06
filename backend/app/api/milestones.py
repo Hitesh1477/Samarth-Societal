@@ -2,6 +2,7 @@
 Milestones API router — Stage 5A.
 
 Routes:
+    GET  /api/projects/{project_id}/milestones → list project milestones
     POST /api/projects/{project_id}/milestones → create milestone for a project
     PUT  /api/milestones/{milestone_id}        → update milestone
 """
@@ -16,6 +17,19 @@ from app.schemas.milestones import (
 from app.services import milestones as milestone_service
 
 router = APIRouter(tags=["milestones"])
+
+
+@router.get(
+    "/api/projects/{project_id}/milestones",
+    response_model=list[MilestoneSchema],
+    response_model_by_alias=True,
+    status_code=status.HTTP_200_OK,
+    summary="List milestones for a project",
+    responses={404: {"description": "Project not found"}},
+)
+async def list_milestones(project_id: str) -> list[MilestoneSchema]:
+    """Return all milestones belonging to an existing project."""
+    return await milestone_service.list_project_milestones_for_api(project_id)
 
 
 @router.post(

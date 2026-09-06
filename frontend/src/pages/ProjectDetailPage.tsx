@@ -19,11 +19,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { api, isMockApi } from '@/services/api';
-import type { Project, Solution } from '@/types';
+import type { Milestone, Project, Solution } from '@/types';
 import { formatDate } from '@/lib/helpers';
 import { toast } from 'sonner';
 
@@ -33,6 +34,14 @@ export function ProjectDetailPage() {
   const [solution, setSolution] = useState<Solution | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestoneTitle, setMilestoneTitle] = useState('');
+  const [milestoneError, setMilestoneError] = useState<string | null>(null);
+  const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
+  const [milestoneUpdating, setMilestoneUpdating] = useState<string | null>(null);
+  const [projectUpdating, setProjectUpdating] = useState(false);
+  const [pilotUpdating, setPilotUpdating] = useState(false);
 
   useEffect(() => {
     const selectedProjectId = id ?? (isMockApi ? 'proj-001' : undefined);
@@ -45,9 +54,23 @@ export function ProjectDetailPage() {
       const s = await api.getSolution(p.challengeId);
       setProject(p);
       setSolution(s);
+      setMilestones(s?.milestones ?? []);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Unable to load project.');
+      setLoading(false);
+    });
   }, [id]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <FileText className="h-8 w-8 text-destructive" />
+        <h2 className="mt-4 font-heading text-xl font-semibold">Project unavailable</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+      </div>
+    );
+  }
 
   if (loading || !project) {
     return (
@@ -59,8 +82,35 @@ export function ProjectDetailPage() {
     );
   }
 
-  const milestones = solution?.milestones ?? [];
   const completedMilestones = milestones.filter((m) => m.status === 'completed').length;
+
+  const handleUpdateProject = async () => {
+    if (projectUpdating) return;
+    setProjectUpdating(true);
+    try {
+      const updated = await api.updateProject(project.id, { status: 'ACTIVE' });
+      setProject(updated);
+      toast.success('Project status updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to update project.');
+    } finally {
+      setProjectUpdating(false);
+    }
+  };
+
+  const handleStartPilot = async () => {
+    if (pilotUpdating || project.status === 'PILOT') return;
+    setPilotUpdating(true);
+    try {
+      const updated = await api.updateProject(project.id, { status: 'PILOT' });
+      setProject(updated);
+      toast.success('Project moved to pilot');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to start pilot.');
+    } finally {
+      setPilotUpdating(false);
+    }
+  };
 
   const handleAddFeedback = () => {
     if (!feedback.trim()) return;
@@ -68,8 +118,54 @@ export function ProjectDetailPage() {
     setFeedback('');
   };
 
-  const handleAddMilestone = () => {
-    toast.success('Milestone creation dialog would open here');
+  const handleAddMilestone = async () => {
+    if (milestoneSubmitting) return;
+    if (!milestoneTitle.trim()) {
+      setMilestoneError('Enter a milestone title.');
+      return;
+    }
+
+    setMilestoneSubmitting(true);
+    setMilestoneError(null);
+    try {
+      const created = await api.createMilestone(project.id, {
+        title: milestoneTitle.trim(),
+        status: 'pending',
+        progress: 0,
+        dueDate: '',
+        evidenceCount: 0,
+      }) as Milestone;
+      setMilestones((current) => [...current, created]);
+      setMilestoneTitle('');
+      const updatedProject = await api.getProject(project.id);
+      setProject(updatedProject);
+      toast.success('Milestone created');
+    } catch (err) {
+      setMilestoneError(err instanceof Error ? err.message : 'Unable to create milestone.');
+    } finally {
+      setMilestoneSubmitting(false);
+    }
+  };
+
+  const handleUpdateMilestone = async (milestone: Milestone) => {
+    if (milestoneUpdating) return;
+    const completed = milestone.progress < 100;
+    setMilestoneUpdating(milestone.id);
+    setMilestoneError(null);
+    try {
+      const updated = await api.updateMilestone(milestone.id, {
+        progress: completed ? 100 : 0,
+        status: completed ? 'completed' : 'pending',
+      }) as Milestone;
+      setMilestones((current) => current.map((item) => item.id === updated.id ? updated : item));
+      const updatedProject = await api.getProject(project.id);
+      setProject(updatedProject);
+      toast.success('Milestone updated');
+    } catch (err) {
+      setMilestoneError(err instanceof Error ? err.message : 'Unable to update milestone.');
+    } finally {
+      setMilestoneUpdating(null);
+    }
   };
 
   return (
@@ -87,6 +183,11 @@ export function ProjectDetailPage() {
         <p className="mt-1 text-sm text-muted-foreground">{project.challengeTitle}</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Badge variant="outline" className="text-xs">{project.status}</Badge>
+          {project.status === 'PROPOSAL' && (
+            <Button size="sm" variant="outline" onClick={handleUpdateProject} disabled={projectUpdating}>
+              {projectUpdating ? 'Updating...' : 'Activate Project'}
+            </Button>
+          )}
           <span className="text-sm text-muted-foreground">
             Created {formatDate(project.createdAt)}
           </span>
@@ -200,10 +301,19 @@ export function ProjectDetailPage() {
                 <CardTitle className="text-base">
                   Milestones ({completedMilestones}/{milestones.length} completed)
                 </CardTitle>
-                <Button size="sm" variant="outline" className="gap-2" onClick={handleAddMilestone}>
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Milestone
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Input
+                    className="w-52"
+                    placeholder="Milestone title"
+                    value={milestoneTitle}
+                    onChange={(e) => setMilestoneTitle(e.target.value)}
+                    disabled={milestoneSubmitting}
+                  />
+                  <Button size="sm" variant="outline" className="gap-2" onClick={handleAddMilestone} disabled={milestoneSubmitting}>
+                    <Plus className="h-3.5 w-3.5" />
+                    {milestoneSubmitting ? 'Adding...' : 'Add Milestone'}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -245,12 +355,22 @@ export function ProjectDetailPage() {
                         <Upload className="h-3 w-3" />
                         Upload
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => handleUpdateMilestone(m)}
+                        disabled={milestoneUpdating !== null}
+                      >
+                        {milestoneUpdating === m.id ? 'Updating...' : m.progress >= 100 ? 'Reopen' : 'Complete'}
+                      </Button>
                     </div>
                   </div>
                 </div>
               ))}
             </CardContent>
           </Card>
+          {milestoneError && <p className="text-sm text-destructive">{milestoneError}</p>}
         </TabsContent>
 
         {/* Prototype */}
@@ -346,7 +466,7 @@ export function ProjectDetailPage() {
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs text-muted-foreground">Status</p>
-                  <Badge variant="outline" className="mt-1 capitalize">Planned</Badge>
+                  <Badge variant="outline" className="mt-1">{project.status}</Badge>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Start Date</p>
@@ -360,6 +480,16 @@ export function ProjectDetailPage() {
                   <p className="mt-1 text-sm font-medium">2,500</p>
                 </div>
               </div>
+              {project.status !== 'PILOT' && (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={handleStartPilot}
+                  disabled={pilotUpdating}
+                >
+                  {pilotUpdating ? 'Starting Pilot...' : 'Start Pilot'}
+                </Button>
+              )}
               <Button asChild variant="outline" className="mt-4 gap-2">
                 <Link to={`/impact/${project.id}`}>
                   <TrendingUp className="h-4 w-4" />

@@ -10,7 +10,7 @@ FastAPI backend for the **SAMARTH** (Societal Action for Managing And Resolving 
 | Validation | Pydantic v2 + pydantic-settings |
 | Database | Supabase (PostgreSQL via REST) |
 | Auth | Supabase Auth |
-| AI | OpenAI GPT-4o (Stage 2+) |
+| AI | Google Gemini Flash-Lite (Stage 7+) |
 | Server | Uvicorn |
 
 ## Setup

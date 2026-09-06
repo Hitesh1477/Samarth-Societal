@@ -23,36 +23,65 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const STORAGE_KEY = 'samarth_user';
 
+async function loadProfileUser(session: Session): Promise<AuthUser> {
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('name, role')
+    .eq('id', session.user.id)
+    .single();
+
+  if (error || !profile?.role) {
+    throw new Error('Your user profile could not be loaded. Please try again.');
+  }
+
+  return {
+    id: session.user.id,
+    name: profile.name || session.user.email?.split('@')[0] || 'User',
+    email: session.user.email || '',
+    role: profile.role as UserRole,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load cached user from localStorage for instant UI
-    const cached = localStorage.getItem(STORAGE_KEY);
-    if (cached) {
-      try {
-        setUser(JSON.parse(cached));
-      } catch {
-        // ignore
-      }
-    }
+    localStorage.removeItem(STORAGE_KEY);
 
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    const syncSession = async (nextSession: Session | null) => {
       if (!mounted) return;
-      setSession(data.session);
-      setLoading(false);
-    });
+      setSession(nextSession);
+      if (!nextSession) {
+        localStorage.removeItem(STORAGE_KEY);
+        setUser(null);
+        return;
+      }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      if (!newSession) {
+      try {
+        const profileUser = await loadProfileUser(nextSession);
+        if (!mounted) return;
+        setUser(profileUser);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(profileUser));
+      } catch {
+        if (!mounted) return;
         localStorage.removeItem(STORAGE_KEY);
         setUser(null);
       }
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      syncSession(data.session).finally(() => {
+        if (mounted) setLoading(false);
+      });
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      void syncSession(newSession);
     });
 
     return () => {
@@ -62,12 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    localStorage.removeItem(STORAGE_KEY);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    const role: UserRole = 'ADMIN';
-    const newUser: AuthUser = { id: 'demo', name: email.split('@')[0], email, role };
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    if (!data.session) throw new Error('Sign in did not create a session.');
+    const profileUser = await loadProfileUser(data.session);
+    setSession(data.session);
+    setUser(profileUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profileUser));
   };
 
   const signUp = async (name: string, email: string, password: string, role: UserRole) => {
@@ -84,14 +115,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Registration succeeded, but the user profile could not be created. Please try again.');
     }
 
-    const newUser: AuthUser = { id: data.user.id, name, email, role };
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    if (!data.session) {
+      throw new Error('Account created. Please confirm your email, then sign in.');
+    }
+    const profileUser = await loadProfileUser(data.session);
+    setSession(data.session);
+    setUser(profileUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profileUser));
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
     localStorage.removeItem(STORAGE_KEY);
+    await supabase.auth.signOut();
+    setSession(null);
     setUser(null);
   };
 

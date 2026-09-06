@@ -23,6 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { api, isMockApi } from '@/services/api';
 import type { ImpactSummary } from '@/types';
@@ -31,6 +32,12 @@ export function ImpactDashboardPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [impact, setImpact] = useState<ImpactSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [label, setLabel] = useState('');
+  const [before, setBefore] = useState('');
+  const [after, setAfter] = useState('');
+  const [unit, setUnit] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const selectedProjectId = projectId ?? (isMockApi ? 'proj-001' : undefined);
@@ -42,8 +49,35 @@ export function ImpactDashboardPage() {
     api.getImpact(selectedProjectId).then((i) => {
       setImpact(i);
       setLoading(false);
+    }).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Unable to load impact data.');
+      setLoading(false);
     });
   }, [projectId]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting || !projectId || !label.trim() || before === '' || after === '') return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const updated = await api.addImpactMetric(projectId, {
+        label: label.trim(),
+        before: Number(before),
+        after: Number(after),
+        unit,
+      });
+      setImpact(updated);
+      setLabel('');
+      setBefore('');
+      setAfter('');
+      setUnit('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to submit impact metric.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (!loading && !impact) {
     return (
@@ -63,6 +97,8 @@ export function ImpactDashboardPage() {
       </div>
     );
   }
+
+  const hasMetrics = impact.metrics.length > 0;
 
   const chartData = impact.metrics.map((m) => ({
     name: m.label,
@@ -95,6 +131,24 @@ export function ImpactDashboardPage() {
           </div>
         </div>
       </div>
+
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="text-base">Add Impact Metric</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-5">
+            <Input placeholder="Metric label" value={label} onChange={(e) => setLabel(e.target.value)} required />
+            <Input type="number" placeholder="Before" value={before} onChange={(e) => setBefore(e.target.value)} required />
+            <Input type="number" placeholder="After" value={after} onChange={(e) => setAfter(e.target.value)} required />
+            <Input placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Submit Metric'}
+            </Button>
+          </form>
+          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+        </CardContent>
+      </Card>
 
       {/* Impact Score + Status */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -139,7 +193,7 @@ export function ImpactDashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-relaxed text-muted-foreground">{impact.summary}</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {hasMetrics ? <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {impact.metrics.map((m) => (
                 <div key={m.id} className="rounded-lg border border-border/60 p-3">
                   <p className="text-xs text-muted-foreground">{m.label}</p>
@@ -154,7 +208,7 @@ export function ImpactDashboardPage() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div> : <p className="mt-4 text-sm text-muted-foreground">No impact metrics recorded yet.</p>}
           </CardContent>
         </Card>
       </div>

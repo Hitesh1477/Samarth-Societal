@@ -21,8 +21,9 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
-    # ── OpenAI (Stage 2+) ──────────────────────────────────────────────────────
-    OPENAI_API_KEY: str = ""
+    # ── Gemini (Stage 7+) ──────────────────────────────────────────────────────
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     # e.g. FRONTEND_URL=http://localhost:5173

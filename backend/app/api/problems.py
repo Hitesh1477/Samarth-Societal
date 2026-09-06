@@ -62,22 +62,25 @@ async def submit_problem(body: SubmitProblemRequest) -> ProblemReportSchema:
     summary="List / filter problem reports",
 )
 async def list_problems(
-    category: Optional[str] = Query(None, description="Filter by problem category"),
-    district: Optional[str] = Query(None, description="Filter by district name"),
-    search:   Optional[str] = Query(None, description="Search title and description"),
+    category:    Optional[str] = Query(None, description="Filter by problem category"),
+    district:    Optional[str] = Query(None, description="Filter by district name"),
+    search:      Optional[str] = Query(None, description="Search title and description"),
+    reporter_id: Optional[str] = Query(None, description="Filter to a specific submitter's user ID (Citizen My Reports)"),
 ) -> list[ProblemReportSchema]:
     """
     Return all problem reports, newest first.
 
     Supports the same filters the frontend sends:
-    - `category` — must match a valid ProblemCategory value (or 'all' to skip)
-    - `district`  — exact match on location district (or 'all' to skip)
-    - `search`    — case-insensitive substring match on title and description
+    - `category`    — must match a valid ProblemCategory value (or 'all' to skip)
+    - `district`    — exact match on location district (or 'all' to skip)
+    - `search`      — case-insensitive substring match on title and description
+    - `reporter_id` — restrict to problems submitted by the given Supabase user ID
     """
     return await problem_service.list_problems(
         category=category,
         district=district,
         search=search,
+        reporter_id=reporter_id,
     )
 
 

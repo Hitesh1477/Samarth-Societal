@@ -1,9 +1,4 @@
-"""
-Duplicate detection service — semantic similarity & clustering for problem reports.
-
-Supports OpenAI embedding similarity when OPENAI_API_KEY is configured,
-with full deterministic fallback using token overlap + category + geographic proximity.
-"""
+"""Duplicate detection service using deterministic similarity and clustering."""
 
 import math
 import re
@@ -11,7 +6,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, List
 
-import httpx
 from fastapi import HTTPException, status
 
 from app.core.config import settings
@@ -116,27 +110,6 @@ def compute_deterministic_similarity(
     return round(min(max(sim, 0.0), 1.0), 2)
 
 
-# ── OpenAI Embedding Similarity Calculation ───────────────────────────────────
-
-async def fetch_openai_embedding(text: str) -> Optional[List[float]]:
-    """Fetch text embedding from OpenAI embedding API."""
-    api_key = settings.OPENAI_API_KEY.strip()
-    if not api_key:
-        return None
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"input": text, "model": "text-embedding-3-small"}
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["data"][0]["embedding"]
-    except Exception as exc:
-        print(f"[WARN] OpenAI embedding fetch failed: {exc}")
-        return None
-
-
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     """Calculate cosine similarity between two vector floats."""
     dot = sum(a * b for a, b in zip(vec1, vec2))
@@ -166,13 +139,6 @@ async def get_duplicate_cluster(problem_id: str) -> DuplicateClusterSchema:
     duplicate_reports: List[DuplicateReportSchema] = []
     cluster_pairs: List[tuple[str, float]] = []
 
-    # 3. Try OpenAI embedding mode if key configured
-    use_openai = bool(settings.OPENAI_API_KEY and settings.OPENAI_API_KEY.strip())
-    target_emb = None
-    if use_openai:
-        target_text = f"{target.title}. {target.category} ({target.subcategory}). {target.description}"
-        target_emb = await fetch_openai_embedding(target_text)
-
     for cand in candidates:
         dist_km = calculate_haversine_distance(
             target.location.lat, target.location.lng,
@@ -181,15 +147,7 @@ async def get_duplicate_cluster(problem_id: str) -> DuplicateClusterSchema:
         dist_str = format_distance(dist_km)
 
         sim_score = 0.0
-        if target_emb:
-            cand_text = f"{cand.title}. {cand.category} ({cand.subcategory}). {cand.description}"
-            cand_emb = await fetch_openai_embedding(cand_text)
-            if cand_emb:
-                sim_score = cosine_similarity(target_emb, cand_emb)
-            else:
-                sim_score = compute_deterministic_similarity(target, cand)
-        else:
-            sim_score = compute_deterministic_similarity(target, cand)
+        sim_score = compute_deterministic_similarity(target, cand)
 
         # Include candidate if similarity >= 0.50
         if sim_score >= 0.50:

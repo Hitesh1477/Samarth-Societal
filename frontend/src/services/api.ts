@@ -57,17 +57,23 @@ async function apiCall<T>(
     return options?.mockResponse as T;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      ...options,
+    });
 
-  if (!res.ok) {
-    const errorBody = await res.text();
-    throw new Error(`API ${res.status}: ${errorBody}`);
+    if (!res.ok) {
+      throw new Error(`API request failed with status ${res.status}`);
+    }
+
+    return res.json();
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('API request failed')) {
+      throw error;
+    }
+    throw new Error('Unable to reach the backend API. Please try again later.');
   }
-
-  return res.json();
 }
 
 export const api = {
@@ -97,6 +103,11 @@ export const api = {
       reports = reports.filter((r) =>
         r.title.toLowerCase().includes(filters.search!.toLowerCase())
       );
+    // When a reporterId is provided (Citizen "My Reports"), only return that
+    // citizen's reports. Legacy mock records without a reporterId are excluded
+    // so mock-mode behaviour mirrors the real backend accurately.
+    if (filters?.reporterId)
+      reports = reports.filter((r) => r.reporterId === filters.reporterId);
     return apiCall(withFilters('/api/problems', filters), { mockResponse: reports });
   },
 
@@ -208,11 +219,11 @@ export const api = {
   },
 
   // Impact
-  async addImpactMetric(projectId: string, data: unknown): Promise<unknown> {
+  async addImpactMetric(projectId: string, data: unknown): Promise<ImpactSummary> {
     return apiCall(`/api/projects/${projectId}/impact`, {
       method: 'POST',
       body: JSON.stringify(data),
-      mockResponse: { success: true },
+      mockResponse: mockImpact,
     });
   },
 

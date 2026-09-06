@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api } from '@/services/api';
+import { useAuth } from '@/hooks/use-auth';
 import type { ProblemReport, ProblemCategory } from '@/types';
 import { urgencyColor, timeAgo } from '@/lib/helpers';
 
@@ -31,26 +32,39 @@ const categories: (ProblemCategory | 'all')[] = [
 ];
 
 export function ProblemsPage() {
+  const { user } = useAuth();
+  const isCitizen = user?.role === 'CITIZEN';
+
   const [reports, setReports] = useState<ProblemReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
 
   useEffect(() => {
+    // CITIZEN: filter to the authenticated user's own reports only.
+    // All other roles (ADMIN, GOVERNMENT, etc.): fetch all reports.
+    const filters = isCitizen && user?.id
+      ? { search, category, reporterId: user.id }
+      : { search, category };
+
     api
-      .getProblems({ search, category })
+      .getProblems(filters)
       .then((r) => {
         setReports(r);
         setLoading(false);
       });
-  }, [search, category]);
+  }, [search, category, isCitizen, user?.id]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">Problems</h1>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">
+          {isCitizen ? 'My Reports' : 'Problems'}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          All citizen-reported problems across the platform
+          {isCitizen
+            ? 'Problems you have submitted to the platform'
+            : 'All citizen-reported problems across the platform'}
         </p>
       </div>
 

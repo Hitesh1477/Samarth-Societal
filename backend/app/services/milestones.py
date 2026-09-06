@@ -70,14 +70,9 @@ async def list_project_milestones(project_id: str) -> list[MilestoneSchema]:
     client = get_supabase_admin_client()
     try:
         res = client.table("milestones").select("*").eq("project_id", project_id).execute()
-        if res.data:
-            db_ms = [_to_milestone_schema(row) for row in res.data]
-            mem_ms = [
-                _to_milestone_schema(m)
-                for m in _MEMORY_MILESTONES.values()
-                if m.get("project_id") == project_id and m["id"] not in [r["id"] for r in res.data]
-            ]
-            return db_ms + mem_ms
+        db_ms = [_to_milestone_schema(row) for row in (res.data or [])]
+        if res.data is not None:
+            return db_ms
     except Exception as exc:
         print(f"[MILESTONE SERVICE] Supabase query fallback to memory: {exc}")
 
@@ -86,6 +81,12 @@ async def list_project_milestones(project_id: str) -> list[MilestoneSchema]:
         for m in _MEMORY_MILESTONES.values()
         if m.get("project_id") == project_id
     ]
+
+
+async def list_project_milestones_for_api(project_id: str) -> list[MilestoneSchema]:
+    """Verify the project exists, then return its persisted milestones."""
+    await project_service.get_project(project_id)
+    return await list_project_milestones(project_id)
 
 
 async def create_milestone(project_id: str, payload: CreateMilestoneRequest) -> MilestoneSchema:

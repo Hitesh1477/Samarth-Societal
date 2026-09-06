@@ -63,6 +63,8 @@ export interface ProblemReport {
   distance?: string;
   createdAt: string;
   reporterName: string;
+  /** Supabase user ID of the submitting citizen. Optional for backwards compat with legacy/mock records. */
+  reporterId?: string;
 }
 
 export interface Evidence {
@@ -286,6 +288,8 @@ export interface ProblemFilters {
   priority?: string;
   status?: string;
   search?: string;
+  /** Filter to a specific submitter's Supabase user ID (used for Citizen "My Reports"). */
+  reporterId?: string;
 }
 
 export interface SubmitProblemData {
@@ -303,4 +307,6 @@ export interface SubmitProblemData {
   };
   evidence: Evidence[];
   reporterName: string;
+  /** Supabase user ID — populated when the submitter is an authenticated citizen. */
+  reporterId?: string;
 }
