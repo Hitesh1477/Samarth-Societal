@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, Search, MapPin, ArrowRight, Filter } from 'lucide-react';
+import { FileText, Search, MapPin, ArrowRight, Filter, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -37,12 +37,14 @@ export function ProblemsPage() {
 
   const [reports, setReports] = useState<ProblemReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
 
-  useEffect(() => {
-    // CITIZEN: filter to the authenticated user's own reports only.
-    // All other roles (ADMIN, GOVERNMENT, etc.): fetch all reports.
+  const fetchReports = useCallback((isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
     const filters = isCitizen && user?.id
       ? { search, category, reporterId: user.id }
       : { search, category };
@@ -51,21 +53,48 @@ export function ProblemsPage() {
       .getProblems(filters)
       .then((r) => {
         setReports(r);
+      })
+      .finally(() => {
         setLoading(false);
+        setRefreshing(false);
       });
   }, [search, category, isCitizen, user?.id]);
 
+  // Fetch on mount and whenever filters / user changes
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  // Re-fetch when the browser tab regains focus so newly submitted problems appear
+  useEffect(() => {
+    const onFocus = () => fetchReports(true);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchReports]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          {isCitizen ? 'My Reports' : 'Problems'}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isCitizen
-            ? 'Problems you have submitted to the platform'
-            : 'All citizen-reported problems across the platform'}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            {isCitizen ? 'My Reports' : 'Problems'}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isCitizen
+              ? 'Problems you have submitted to the platform'
+              : 'All citizen-reported problems across the platform'}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchReports(true)}
+          disabled={refreshing}
+          className="shrink-0 gap-2"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
       </div>
 
       {/* Filters */}
@@ -96,7 +125,7 @@ export function ProblemsPage() {
 
       {/* List */}
       {loading ? (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
           ))}
@@ -109,11 +138,11 @@ export function ProblemsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-4">
           {reports.map((r) => (
             <Link key={r.id} to={`/report/${r.id}/analysis`}>
-              <Card className="border-border/60 transition-all hover:border-primary/30 hover:shadow-md">
-                <CardContent className="p-4">
+              <Card className="border border-border shadow-sm transition-all hover:border-primary/40 hover:shadow-md">
+                <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold text-foreground">{r.title}</h3>

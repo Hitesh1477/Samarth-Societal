@@ -20,6 +20,8 @@ import { ProjectsPage } from '@/pages/ProjectsPage';
 import { ProjectDetailPage } from '@/pages/ProjectDetailPage';
 import { ImpactDashboardPage } from '@/pages/ImpactDashboardPage';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
+import { ProfilePage } from '@/pages/ProfilePage';
+import { SettingsPage } from '@/pages/SettingsPage';
 
 export default function App() {
   return (
@@ -185,6 +187,27 @@ export default function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <AnalyticsPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ProfilePage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <SettingsPage />
                 </AppLayout>
               </ProtectedRoute>
             }

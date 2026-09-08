@@ -29,6 +29,17 @@ from app.services import challenges as challenge_service
 from app.services import projects as project_service
 from app.services import pilots_impact as pilot_impact_service
 
+# ── Jharkhand districts whitelist ─────────────────────────────────────────────
+# Only problems/challenges from these districts are shown in analytics.
+# Reports submitted with non-Jharkhand district values are excluded from charts.
+JHARKHAND_DISTRICTS = {
+    "Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka", "East Singhbhum",
+    "Garhwa", "Giridih", "Godda", "Gumla", "Hazaribagh", "Jamtara",
+    "Khunti", "Koderma", "Latehar", "Lohardaga", "Pakur", "Palamu",
+    "Ramgarh", "Ranchi", "Sahebganj", "Seraikela Kharsawan", "Simdega",
+    "West Singhbhum",
+}
+
 
 async def get_dashboard_stats() -> DashboardStatsSchema:
     """
@@ -148,7 +159,7 @@ async def get_dashboard_data() -> DashboardDataSchema:
         for level in ["HIGH", "MEDIUM", "LOW"]
     ]
 
-    # 4. reportsByDistrict
+    # 4. reportsByDistrict — only Jharkhand districts
     dist_counts = Counter(
         str(p.get("location_district") or p.get("district") or "Unknown") for p in problems_rows
     )
@@ -157,6 +168,7 @@ async def get_dashboard_data() -> DashboardDataSchema:
     reports_by_district = [
         ChartDataPoint(name=dist, value=float(count))
         for dist, count in dist_counts.items()
+        if dist in JHARKHAND_DISTRICTS  # exclude test/invalid district names
     ]
 
     # 5. challengeLifecycle
